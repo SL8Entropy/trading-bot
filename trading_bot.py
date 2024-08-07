@@ -1,19 +1,24 @@
 import asyncio
 import websockets
 import json
+import time
 from deriv_api import DerivAPI
 
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
 failAmount = 0
+startAmount = 100
 symbol = "R_100"
-interval = 60
+print(f"Trading in {symbol}")
+interval = 180 #in seconds
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
 ####to make terminak more clear, i have put 4 hashes #### at every over the top print function
 async def trade(api, symbol, interval, direction):
     global failAmount
-    amount = 10*(2**failAmount)
+    global startAmount
+    amount = startAmount*(2**failAmount)
+    time = 0
     print(f"Making Trade: {symbol}, Interval: {interval}, Direction: {direction}, amount: {amount}")
     
     try:
@@ -37,7 +42,7 @@ async def trade(api, symbol, interval, direction):
 
         buy = await api.buy({"buy": proposal_id, "price": 100})
         print("Buy response:", buy)
-
+        print(f"Trade made. Amount = {amount}, direction = {direction}, duration = {interval}")
         contract_id = buy.get('buy', {}).get('contract_id')
 
         if not contract_id:
@@ -46,7 +51,8 @@ async def trade(api, symbol, interval, direction):
         while True:
             poc = await api.proposal_open_contract({"proposal_open_contract": 1, "contract_id": contract_id})
             print("Proposal open contract:", poc)
-
+            print(f"Trade ongoing, Please wait. Time elapsed = {time}")
+            time += 30
             # Check if the contract has expired or if the trade is sold
             is_sold = poc.get('proposal_open_contract', {}).get('is_sold')
             if is_sold:
@@ -61,9 +67,17 @@ async def trade(api, symbol, interval, direction):
                 else:
                     print("Trade status is unknown.")
                 break
-
-            await asyncio.sleep(5)
-
+            
+                    
+            await asyncio.sleep(30)
+        if failAmount>=4:
+            time = 0
+            print("Failed too many times in a row. This is usually due to market conditions not being normal. Please try again another day.")
+            while True:
+                timeLeft = 30-time
+                print(f"Time until automatic shutdown {timeLeft}")
+                time+=5
+                time.sleep(5)
     except Exception as e:
         print(f"An error occurred in trade: {e}")
 
@@ -143,7 +157,7 @@ def triple_rebound_strategy(rsi_values):
         rsi_14 = rsi_values[14][-1]
         rsi_7 = rsi_values[7][-1]
         rsi_21 = rsi_values[21][-1]
-
+        '''
         count_below_30 = sum(rsi < 30 for rsi in [rsi_14, rsi_7, rsi_21])
         count_above_70 = sum(rsi > 70 for rsi in [rsi_14, rsi_7, rsi_21])
 
@@ -153,6 +167,14 @@ def triple_rebound_strategy(rsi_values):
             return "PUT"
         else:
             return None
+        '''
+        
+        if rsi_7 <30 and rsi_14<30 and rsi_21<35:
+            return "CALL"
+        if rsi_7 > 70 and rsi_14>70 and rsi_21>65:
+            return "PUT"   
+        else:
+            return None    
     except IndexError as e:
         print(f"Index error in triple rebound strategy: {e}")
         return None
@@ -172,9 +194,9 @@ async def main():
             if direction:
                 await trade(api, symbol, interval, direction)
             else:
-                print("parameters not met. waiting 5 seconds then rechecking")
+                print("Parameters not met. Waiting 1 second then rechecking")
                 print("failamount = "+str(failAmount))####
-            await asyncio.sleep(5)
+            await asyncio.sleep(1)
 
     except KeyboardInterrupt:
         print("Process interrupted by user.")
