@@ -1,150 +1,184 @@
-from deriv_api import DerivAPI
 import asyncio
-import requests
-import time
+import websockets
+import json
+from deriv_api import DerivAPI
 
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
-
-
-# Example usage
-symbol = "R_100"  # Replace with the correct symbol
-interval = 60     # 60 seconds (1 minute)
-period = 14       # Williams %R period
-
-async def trade(symbol, interval, direction):
-    print("Making Trade" +symbol+str(interval)+ direction)
+failAmount = 0
+symbol = "R_100"
+interval = 60
+periods = [14, 7, 21]
+min_data_points = max(periods) + 1
+####to make terminak more clear, i have put 4 hashes #### at every over the top print function
+async def trade(api, symbol, interval, direction):
+    global failAmount
+    amount = 10*(2**failAmount)
+    print(f"Making Trade: {symbol}, Interval: {interval}, Direction: {direction}, amount: {amount}")
+    
     try:
-        # Initialize the Deriv API connection
-        api = DerivAPI(app_id=app_id)
-
-        # Authorize with your API token
-        authorize = await api.authorize(app_token)
-        print("Authorize response:", authorize)
-
-        # Propose an Up/Down contract
         proposal = await api.proposal({
             "proposal": 1,
-            "amount": 1,
-            "barrier": "+0.1",  # Adjust barrier based on your strategy
+            "amount": amount,
+            "barrier": "+0.1",
             "basis": "payout",
-            "contract_type": direction,  # Use "CALL" for Up, "PUT" for Down
+            "contract_type": direction,
             "currency": "USD",
-            "duration": interval,  # Duration in seconds
+            "duration": interval,
             "duration_unit": "s",
-            "symbol": symbol  # Replace with the desired symbol (R_100 = volality 100 index)
+            "symbol": symbol
         })
         print("Proposal response:", proposal)
 
-        proposal_id = proposal.get('proposal').get('id')
+        proposal_id = proposal.get('proposal', {}).get('id')
 
-        # Buy the proposed contract
+        if not proposal_id:
+            raise Exception("Failed to get proposal ID")
+
         buy = await api.buy({"buy": proposal_id, "price": 100})
         print("Buy response:", buy)
 
-        contract_id = buy.get('buy').get('contract_id')
-        '''
-        # Optionally, subscribe to contract updates
-        source_poc = await api.subscribe({"proposal_open_contract": 1, "contract_id": contract_id})
-        source_poc.subscribe(lambda poc: print("Subscribed POC:", poc))
-        '''
-        # Wait for the contract to be sold or expired
+        contract_id = buy.get('buy', {}).get('contract_id')
+
+        if not contract_id:
+            raise Exception("Failed to get contract ID")
+
         while True:
             poc = await api.proposal_open_contract({"proposal_open_contract": 1, "contract_id": contract_id})
             print("Proposal open contract:", poc)
 
-            if poc.get('proposal_open_contract').get('is_sold'):
+            # Check if the contract has expired or if the trade is sold
+            is_sold = poc.get('proposal_open_contract', {}).get('is_sold')
+            if is_sold:
+                contract_status = poc.get('proposal_open_contract', {}).get('status')
+                if contract_status == 'won':
+                    print("Trade won!")
+                    failAmount=0
+                elif contract_status == 'lost':
+                    print("Trade lost.")
+                    failAmount+=1
+                    print("number of times failed in a row"+str(failAmount))####
+                else:
+                    print("Trade status is unknown.")
                 break
 
-            # If you want to sell the contract before expiry, implement the logic here
-            # sell = await api.sell({"sell": contract_id, "price": 40})
-            # print("Sell response:", sell)
+            await asyncio.sleep(5)
 
-            await asyncio.sleep(1)
-        '''
-        # Get the profit table
-        profit_table = await api.profit_table({"profit_table": 1, "description": 1, "sort": "ASC"})
-        print("Profit table:", profit_table)
-
-        # Get the statement
-        statement = await api.statement({"statement": 1, "description": 1, "limit": 100, "offset": 25})
-        print("Statement:", statement)
-        '''
     except Exception as e:
-        print("An error occurred:", e)
+        print(f"An error occurred in trade: {e}")
 
-        # example make a trade up
-        #asyncio.run(trade(symbol,interval,"CALL"))
+    except Exception as e:
+        print(f"An error occurred in trade: {e}")
 
+async def fetch_historical_data(symbol, count):
+    async with websockets.connect(f'wss://ws.binaryws.com/websockets/v3?app_id={app_id}') as websocket:
+        request = {
+            "ticks_history": symbol,
+            "end": "latest",
+            "count": count,
+            "style": "ticks"
+        }
+        await websocket.send(json.dumps(request))
+        response = await websocket.recv()
+        data = json.loads(response)
+        if 'error' in data:
+            raise Exception(f"Error fetching historical data: {data['error']}")
+        return data
 
-def fetch_historical_data(symbol, interval, count):
-    """
-    Fetch historical price data from the Deriv API.
-    """
-    url = "https://api.deriv.com/v1/ticks"
-    params = {
-        "symbol": symbol,
-        "interval": interval,
-        "count": count
-    }
-    response = requests.get(url, params=params)
-    response.raise_for_status()  # Check for request errors
-    return response.json()
+def calculate_rsi(data, period):
+    ticks = data.get('history', {}).get('prices', [])
 
-
-
-
-
-
-## DO the calculate and update for second indicator
-def calculate_williams_r(data, period):
-    """
-    Calculate Williams %R based on historical price data.
-    """
-    ticks = data.get('ticks', [])
     if len(ticks) < period:
-        raise ValueError("Not enough data points to calculate Williams %R.")
+        raise ValueError("Not enough data points to calculate RSI.")
 
-    closes = [tick['close'] for tick in ticks]
-    highs = [tick['high'] for tick in ticks]
-    lows = [tick['low'] for tick in ticks]
+    closes = list(map(float, ticks))
+    gains = []
+    losses = []
 
-    williams_r_values = []
+    for i in range(1, len(closes)):
+        change = closes[i] - closes[i - 1]
+        if change > 0:
+            gains.append(change)
+            losses.append(0)
+        else:
+            gains.append(0)
+            losses.append(abs(change))
 
-    for i in range(period-1, len(ticks)):
-        highest_high = max(highs[i-period+1:i+1])
-        lowest_low = min(lows[i-period+1:i+1])
-        current_close = closes[i]
-        
-        williams_r = ((highest_high - current_close) / (highest_high - lowest_low)) * -100
-        williams_r_values.append(williams_r)
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
 
-    return williams_r_values
+    rs = avg_gain / avg_loss if avg_loss != 0 else 0
+    rsi = 100 - (100 / (1 + rs))
 
-def update_williams_r(symbol, interval, period):
-    """
-    Fetch historical data and calculate Williams %R.
-    """
-    data = fetch_historical_data(symbol, interval, count=period + 100)  # Fetch extra data to ensure full period calculation
-    return calculate_williams_r(data, period)
+    rsi_values = [rsi]
 
+    for i in range(period, len(closes)-1):
+        gain = gains[i]
+        loss = losses[i]
+        avg_gain = ((avg_gain * (period - 1)) + gain) / period
+        avg_loss = ((avg_loss * (period - 1)) + loss) / period
+        rs = avg_gain / avg_loss if avg_loss != 0 else 0
+        rsi = 100 - (100 / (1 + rs))
+        rsi_values.append(rsi)
+    return rsi_values
 
-
-
-
-
-
-
-
-try:
+async def update_rsi(symbol, periods):
+    count = max(periods) + 100
     while True:
-        williams_r_values = update_williams_r(symbol, interval, period)
-        print(f"Latest Williams %R: {williams_r_values[-1]}")
-        #########################################Place update for second indicator here
-        #########################################Place trading strategy here
-        time.sleep(interval)  # Wait for the next interval
-except KeyboardInterrupt:
-    print("Process interrupted by user.")
-except Exception as e:
-    print(f"An error occurred: {e}")
+        try:
+            data = await fetch_historical_data(symbol, count)
+            ####print(f"Fetched historical data: {data}")
+            rsi_values = {}
+            for period in periods:
+                rsi_values[period] = calculate_rsi(data, period)
+            ####print(f"Calculated RSI values: {rsi_values}")
+            return rsi_values
+        except ValueError as e:
+            print(f"Not enough data points: {e}. Increasing count and retrying...")
+            count += 100
+            await asyncio.sleep(5)
 
+def triple_rebound_strategy(rsi_values):
+    try:
+        rsi_14 = rsi_values[14][-1]
+        rsi_7 = rsi_values[7][-1]
+        rsi_21 = rsi_values[21][-1]
+
+        count_below_30 = sum(rsi < 30 for rsi in [rsi_14, rsi_7, rsi_21])
+        count_above_70 = sum(rsi > 70 for rsi in [rsi_14, rsi_7, rsi_21])
+
+        if count_below_30 >= 2:
+            return "CALL"
+        elif count_above_70 >= 2:
+            return "PUT"
+        else:
+            return None
+    except IndexError as e:
+        print(f"Index error in triple rebound strategy: {e}")
+        return None
+
+async def main():
+    global failAmount
+    try:
+        api = DerivAPI(app_id=app_id)
+        authorize = await api.authorize(app_token)
+        print("Authorize response:", authorize)
+
+        while True:
+            rsi_values = await update_rsi(symbol, periods)
+            ####print(f"Latest RSI values: {rsi_values}")
+
+            direction = triple_rebound_strategy(rsi_values)
+            if direction:
+                await trade(api, symbol, interval, direction)
+            else:
+                print("parameters not met. waiting 5 seconds then rechecking")
+                print("failamount = "+str(failAmount))####
+            await asyncio.sleep(5)
+
+    except KeyboardInterrupt:
+        print("Process interrupted by user.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+asyncio.run(main())
