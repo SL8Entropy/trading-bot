@@ -9,7 +9,7 @@ app_token = "AP3ri2UNkUqqoCf"
 failAmount = 0
 startAmount = 100
 symbol = "R_100"
-print(f"Trading in {symbol}")
+barrier = "0.1"
 interval = 180 #in seconds
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
@@ -20,12 +20,16 @@ async def trade(api, symbol, interval, direction):
     amount = startAmount*(2**failAmount)
     time = 0
     print(f"Making Trade: {symbol}, Interval: {interval}, Direction: {direction}, amount: {amount}")
+    if direction == "CALL":
+        bar = "+"+barrier
+    else:
+        bar = "-"+barrier
     
     try:
         proposal = await api.proposal({
             "proposal": 1,
             "amount": amount,
-            "barrier": "+0.1",
+            "barrier": bar,
             "basis": "payout",
             "contract_type": direction,
             "currency": "USD",
@@ -69,7 +73,7 @@ async def trade(api, symbol, interval, direction):
                 break
             
                     
-            await asyncio.sleep(30)
+            await asyncio.sleep(31)
         if failAmount>=4:
             time = 0
             print("Failed too many times in a row. This is usually due to market conditions not being normal. Please try again another day.")
@@ -78,6 +82,7 @@ async def trade(api, symbol, interval, direction):
                 print(f"Time until automatic shutdown {timeLeft}")
                 time+=5
                 time.sleep(5)
+            exit(1)
     except Exception as e:
         print(f"An error occurred in trade: {e}")
 
@@ -194,13 +199,15 @@ async def main():
             if direction:
                 await trade(api, symbol, interval, direction)
             else:
-                print("Parameters not met. Waiting 1 second then rechecking")
+                print("Parameters not met. Waiting 5 seconds then rechecking")
                 print("failamount = "+str(failAmount))####
-            await asyncio.sleep(1)
+            await asyncio.sleep(5)
 
     except KeyboardInterrupt:
         print("Process interrupted by user.")
     except Exception as e:
         print(f"An error occurred: {e}")
+        
 
+print(f"Trading in {symbol}")
 asyncio.run(main())
