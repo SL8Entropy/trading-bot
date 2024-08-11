@@ -9,8 +9,14 @@ app_token = "AP3ri2UNkUqqoCf"
 failAmount = 0
 startAmount = 100
 symbol = "R_100"
+#Lowamount and Highamount respectively
+#30,70 for medium trading. reccomended barrier: 0.1
+#20,80 for safe trading, but not many trades per second. reccomended barrier:0.2
+#40,60 for fast trading, but not much chance for success. reccomended barrier:0.01
+Lowamount = 30
+Highamount = 70
 barrier = "0.1"
-interval = 180 #in seconds
+interval = 120 #in seconds
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
 ####to make terminak more clear, i have put 4 hashes #### at every over the top print function
@@ -173,10 +179,11 @@ def triple_rebound_strategy(rsi_values):
         else:
             return None
         '''
+        global Lowamount,Highamount
         
-        if rsi_7 <30 and rsi_14<30 and rsi_21<35:
+        if rsi_7 <Lowamount and rsi_14<Lowamount and rsi_21<Lowamount+5:
             return "CALL"
-        if rsi_7 > 70 and rsi_14>70 and rsi_21>65:
+        if rsi_7 > Highamount and rsi_14>Highamount and rsi_21>Highamount-5:
             return "PUT"   
         else:
             return None    
