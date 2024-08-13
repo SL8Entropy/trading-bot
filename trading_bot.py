@@ -6,6 +6,7 @@ from deriv_api import DerivAPI
 
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
+
 failAmount = 0
 startAmount = 100
 symbol = "R_100"
