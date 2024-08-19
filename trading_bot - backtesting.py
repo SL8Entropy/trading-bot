@@ -7,92 +7,23 @@ from deriv_api import DerivAPI
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
 
+money = 10000
 failAmount = 0
 startAmount = 100
 symbol = "R_100"
 Lowamount = 30
 Highamount = 70
 barrier = "0.1"
-interval = 120  # in seconds
+interval = 120  # Trade duration in seconds
+check_interval = 5  # Time between market checks in seconds
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
 
-async def trade(api, symbol, interval, direction):
-    global failAmount
-    global startAmount
-    amount = startAmount * (2 ** failAmount)
-    time_elapsed = 0
-    print(f"Making Trade: {symbol}, Interval: {interval}, Direction: {direction}, amount: {amount}")
-    
-    if direction == "CALL":
-        bar = "+" + barrier
-    else:
-        bar = "-" + barrier
-
-    try:
-        proposal = await api.proposal({
-            "proposal": 1,
-            "amount": amount,
-            "barrier": bar,
-            "basis": "payout",
-            "contract_type": direction,
-            "currency": "USD",
-            "duration": interval,
-            "duration_unit": "s",
-            "symbol": symbol
-        })
-        print("Proposal response:", proposal)
-
-        proposal_id = proposal.get('proposal', {}).get('id')
-
-        if not proposal_id:
-            raise Exception("Failed to get proposal ID")
-
-        buy = await api.buy({"buy": proposal_id, "price": 100})
-        print("Buy response:", buy)
-        print(f"Trade made. Amount = {amount}, direction = {direction}, duration = {interval}")
-        contract_id = buy.get('buy', {}).get('contract_id')
-
-        if not contract_id:
-            raise Exception("Failed to get contract ID")
-
-        while True:
-            poc = await api.proposal_open_contract({"proposal_open_contract": 1, "contract_id": contract_id})
-            print("Proposal open contract:", poc)
-            print(f"Trade ongoing, Please wait. Time elapsed = {time_elapsed}")
-            time_elapsed += 30
-            is_sold = poc.get('proposal_open_contract', {}).get('is_sold')
-            if is_sold:
-                contract_status = poc.get('proposal_open_contract', {}).get('status')
-                if contract_status == 'won':
-                    print("Trade won!")
-                    failAmount = 0
-                elif contract_status == 'lost':
-                    print("Trade lost.")
-                    failAmount += 1
-                    print("Number of times failed in a row: " + str(failAmount))
-                else:
-                    print("Trade status is unknown.")
-                break
-
-            await asyncio.sleep(31)
-        if failAmount >= 4:
-            time_left = 0
-            print("Failed too many times in a row. This is usually due to market conditions not being normal. Please try again another day.")
-            while True:
-                time_remaining = 30 - time_left
-                print(f"Time until automatic shutdown: {time_remaining}")
-                time_left += 5
-                time.sleep(5)
-            exit(1)
-    except Exception as e:
-        print(f"An error occurred in trade: {e}")
-
-async def fetch_historical_data(symbol, count):
+async def fetch_historical_data(symbol, count, start="latest"):
     async with websockets.connect(f'wss://ws.binaryws.com/websockets/v3?app_id={app_id}') as websocket:
         request = {
             "ticks_history": symbol,
-            "end": "latest",
+            "end": start,
             "count": count,
             "style": "ticks"
         }
@@ -105,13 +36,11 @@ async def fetch_historical_data(symbol, count):
 
 def calculate_rsi(data, period):
     ticks = data.get('history', {}).get('prices', [])
-
     if len(ticks) < period:
         raise ValueError("Not enough data points to calculate RSI.")
-
+    
     closes = list(map(float, ticks))
-    gains = []
-    losses = []
+    gains, losses = [], []
 
     for i in range(1, len(closes)):
         change = closes[i] - closes[i - 1]
@@ -130,7 +59,7 @@ def calculate_rsi(data, period):
 
     rsi_values = [rsi]
 
-    for i in range(period, len(closes)-1):
+    for i in range(period, len(closes) - 1):
         gain = gains[i]
         loss = losses[i]
         avg_gain = ((avg_gain * (period - 1)) + gain) / period
@@ -138,17 +67,17 @@ def calculate_rsi(data, period):
         rs = avg_gain / avg_loss if avg_loss != 0 else 0
         rsi = 100 - (100 / (1 + rs))
         rsi_values.append(rsi)
+    
     return rsi_values
 
 def calculate_stochastic(data, period=14):
     ticks = data.get('history', {}).get('prices', [])
-
     if len(ticks) < period:
         raise ValueError("Not enough data points to calculate Stochastic Oscillator.")
-
+    
     closes = list(map(float, ticks))
     stoch_k = []
-    
+
     for i in range(period - 1, len(closes)):
         low = min(closes[i - period + 1:i + 1])
         high = max(closes[i - period + 1:i + 1])
@@ -182,7 +111,7 @@ def calculate_macd(data, short_period=12, long_period=26, signal_period=9):
 
     return macd_line[-1], signal_line[-1], macd_histogram[-1]
 
-async def update_rsi_and_indicators(symbol, periods):
+async def update_indicators(symbol, periods):
     count = max(periods) + 100
     while True:
         try:
@@ -213,28 +142,62 @@ def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d, macd_line, si
     else:
         return None
 
-async def main():
-    global failAmount
+async def backtest_strategy():
+    global failAmount, money
     try:
         api = DerivAPI(app_id=app_id)
         authorize = await api.authorize(app_token)
         print("Authorize response:", authorize)
 
-        while True:
-            rsi_values, stoch_k, stoch_d, macd_line, signal_line, macd_histogram = await update_rsi_and_indicators(symbol, periods)
+        # Fetch historical data for the last week
+        num_intervals = (7 * 24 * 60 * 60) // check_interval
+        historical_data = await fetch_historical_data(symbol, num_intervals)
+
+        prices = historical_data['history']['prices']
+
+        start = 0
+        while start < len(prices) - interval:
+            # Update indicators at each check interval
+            sliced_data = {'history': {'prices': prices[start:start + interval]}}
+            rsi_values, stoch_k, stoch_d, macd_line, signal_line, macd_histogram = await update_indicators(symbol, periods)
 
             direction = enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d, macd_line, signal_line, macd_histogram)
+
             if direction:
-                await trade(api, symbol, interval, direction)
+                money -= startAmount * (2 ** failAmount)
+                entry_price = float(prices[start])
+                exit_price = float(prices[start + interval])
+                print(f"Simulated Trade: {symbol}, Interval: {interval}, Direction: {direction}")
+                print(f"Entry Price: {entry_price}, Exit Price: {exit_price}")
+
+                # Determine if the trade is successful
+                if direction == "CALL" and exit_price > entry_price:
+                    print(f"Simulated CALL trade successful!")
+                    money += startAmount * (2 ** (failAmount + 1))
+                    failAmount = 0
+                elif direction == "PUT" and exit_price < entry_price:
+                    print(f"Simulated PUT trade successful!")
+                    money += startAmount * (2 ** (failAmount + 1))
+                    failAmount = 0
+                else:
+                    print(f"Simulated trade failed.")
+                    failAmount += 1
+
+                # Skip the next `interval` worth of market indices
+                start += interval
             else:
-                print("Parameters not met. Waiting 5 seconds then rechecking")
-                print("failamount = " + str(failAmount))
-            await asyncio.sleep(5)
+                print(f"Parameters not met for interval starting at price index {start}.")
+
+            print(f"Current money: {money}")
+            print(f"Fail amount: {failAmount}")
+            print(f"simulated market time elapsed: {start/5} seconds")
+            start += check_interval  # Move to the next check interval
+            #await asyncio.sleep(check_interval)  # Simulate waiting for 5 seconds before the next check
 
     except KeyboardInterrupt:
         print("Process interrupted by user.")
     except Exception as e:
         print(f"An error occurred: {e}")
 
-print(f"Trading in {symbol}")
-asyncio.run(main())
+print(f"Backtesting strategy for {symbol}")
+asyncio.run(backtest_strategy())
