@@ -95,32 +95,6 @@ def calculate_stochastic(data, period=14):
     return stoch_k[-1], stoch_d
 
 
-def calculate_ema(prices, period):
-    ema = []
-    k = 2 / (period + 1)
-    for i in range(len(prices)):
-        if i == 0:
-            ema.append(prices[i])
-        else:
-            ema.append((prices[i] * k) + (ema[i - 1] * (1 - k)))
-    return ema
-
-
-def calculate_macd(data, short_period=12, long_period=26, signal_period=9):
-    ticks = data.get('history', {}).get('prices', [])
-    closes = list(map(float, ticks))
-
-    ema_short = calculate_ema(closes, short_period)
-    ema_long = calculate_ema(closes, long_period)
-
-    macd_line = [ema_short[i] - ema_long[i] for i in range(len(ema_short))]
-    signal_line = calculate_ema(macd_line, signal_period)
-    macd_histogram = [
-        macd_line[i] - signal_line[i] for i in range(len(signal_line))
-    ]
-
-    return macd_line[-1], signal_line[-1], macd_histogram[-1]
-
 
 async def update_indicators(symbol, periods):
     count = max(periods) + 100
@@ -131,9 +105,8 @@ async def update_indicators(symbol, periods):
             for period in periods:
                 rsi_values[period] = calculate_rsi(data, period)
             stoch_k, stoch_d = calculate_stochastic(data)
-            macd_line, signal_line, macd_histogram = calculate_macd(data)
 
-            return rsi_values, stoch_k, stoch_d, macd_line, signal_line, macd_histogram
+            return rsi_values, stoch_k, stoch_d
         except ValueError as e:
             print(
                 f"Not enough data points: {e}. Increasing count and retrying..."
@@ -142,19 +115,16 @@ async def update_indicators(symbol, periods):
             await asyncio.sleep(5)
 
 
-def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d, macd_line,
-                                     signal_line, macd_histogram):
+def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d):
     rsi_14 = rsi_values[14][-1]
     rsi_7 = rsi_values[7][-1]
     rsi_21 = rsi_values[21][-1]
 
     if (rsi_7 < Lowamount and rsi_14 < Lowamount and rsi_21 < Lowamount + 5
-            and stoch_k < 20 and stoch_d < 20 and macd_line > signal_line
-            and macd_histogram > 0):
+            and stoch_k < 20 and stoch_d < 20):
         return "CALL"
     elif (rsi_7 > Highamount and rsi_14 > Highamount
-          and rsi_21 > Highamount - 5 and stoch_k > 80 and stoch_d > 80
-          and macd_line < signal_line and macd_histogram < 0):
+          and rsi_21 > Highamount - 5 and stoch_k > 80 and stoch_d > 80):
         return "PUT"
     else:
         return None
@@ -181,12 +151,11 @@ async def backtest_strategy():
                     'prices': prices[start:start + interval]
                 }
             }
-            rsi_values, stoch_k, stoch_d, macd_line, signal_line, macd_histogram = await update_indicators(
+            rsi_values, stoch_k, stoch_d= await update_indicators(
                 symbol, periods)
 
             direction = enhanced_triple_rebound_strategy(
-                rsi_values, stoch_k, stoch_d, macd_line, signal_line,
-                macd_histogram)
+                rsi_values, stoch_k, stoch_d)
 
             if direction:
                 money -= startAmount * (2**failAmount)
