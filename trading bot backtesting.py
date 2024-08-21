@@ -11,8 +11,8 @@ money = 10000
 failAmount = 0
 startAmount = 100
 symbol = "R_100"
-Lowamount = 30
-Highamount = 70
+Lowamount = 40
+Highamount = 60
 barrier = "0.1"
 interval = 120  # Trade duration in seconds
 check_interval = 5  # Time between market checks in seconds
@@ -105,9 +105,9 @@ def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d):
     rsi_21 = rsi_values[21][-1]
     
     print(f"rsi 7: {rsi_7}, rsi 14: {rsi_14}, rsi: 21: {rsi_21}, stoch k : {stoch_k}, stoch d: {stoch_d}")
-    if rsi_7 < Lowamount and rsi_14 < Lowamount and rsi_21 < Lowamount + 5 and stoch_k < 20 and stoch_d < 20:
+    if rsi_7 < Lowamount and rsi_14 < Lowamount and rsi_21 < Lowamount + 5 and stoch_k < Lowamount and stoch_d < Lowamount:
         return "CALL"
-    elif rsi_7 > Highamount and rsi_14 > Highamount and rsi_21 > Highamount - 5 and stoch_k > 80 and stoch_d > 80:
+    elif rsi_7 > Highamount and rsi_14 > Highamount and rsi_21 > Highamount - 5 and stoch_k > Highamount and stoch_d > Highamount:
         return "PUT"
     else:
         return None
@@ -155,14 +155,14 @@ async def backtest_strategy():
                     failAmount += 1
 
                 # Skip the next `interval` worth of market indices
-                start += interval
+                start += interval*5
             else:
                 print(f"Parameters not met for interval starting at price index {start}.")
 
             print(f"Current money: {money}")
             print(f"Fail amount: {failAmount}")
             
-            start += check_interval  # Move to the next check interval
+            start += check_interval*5  # Move to the next check interval
             #await asyncio.sleep(check_interval)  # Simulate waiting for 5 seconds before the next check
 
     except KeyboardInterrupt:

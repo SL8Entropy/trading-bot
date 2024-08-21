@@ -179,10 +179,10 @@ def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d):
     rsi_14 = rsi_values[14][-1]
     rsi_7 = rsi_values[7][-1]
     rsi_21 = rsi_values[21][-1]
-
-    if (rsi_7 < Lowamount and rsi_14 < Lowamount and rsi_21 < Lowamount + 5 and stoch_k < 20 and stoch_d < 20):
+    print(f"rsi 7: {rsi_7}, rsi 14: {rsi_14}, rsi: 21: {rsi_21}, stoch k : {stoch_k}, stoch d: {stoch_d}")  
+    if (rsi_7 < Lowamount and rsi_14 < Lowamount and rsi_21 < Lowamount + 5 and stoch_k < Lowamount and stoch_d < Lowamount):
         return "CALL"
-    elif (rsi_7 > Highamount and rsi_14 > Highamount and rsi_21 > Highamount - 5 and stoch_k > 80 and stoch_d > 80):
+    elif (rsi_7 > Highamount and rsi_14 > Highamount and rsi_21 > Highamount - 5 and stoch_k > Highamount and stoch_d > Highamount):
         return "PUT"
     else:
         return None
