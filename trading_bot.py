@@ -9,10 +9,10 @@ app_token = "AP3ri2UNkUqqoCf"
 failAmount = 0
 startAmount = 100
 symbol = "R_100"
-Lowamount = 30
-Highamount = 70
+Lowamount = 40
+Highamount = 60
 barrier = "0.1"
-interval = 120  # in seconds
+interval = 30  # in seconds
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
 
@@ -59,7 +59,7 @@ async def trade(api, symbol, interval, direction):
             poc = await api.proposal_open_contract({"proposal_open_contract": 1, "contract_id": contract_id})
             print("Proposal open contract:", poc)
             print(f"Trade ongoing, Please wait. Time elapsed = {time_elapsed}")
-            time_elapsed += 30
+            time_elapsed += interval/3
             is_sold = poc.get('proposal_open_contract', {}).get('is_sold')
             if is_sold:
                 contract_status = poc.get('proposal_open_contract', {}).get('status')
@@ -74,7 +74,7 @@ async def trade(api, symbol, interval, direction):
                     print("Trade status is unknown.")
                 break
 
-            await asyncio.sleep(31)
+            await asyncio.sleep(interval/3 + 5)
         if failAmount >= 4:
             time_left = 0
             print("Failed too many times in a row. This is usually due to market conditions not being normal. Please try again another day.")
