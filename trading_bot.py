@@ -86,6 +86,9 @@ async def trade(api, symbol, interval, direction):
             exit(1)
     except Exception as e:
         print(f"An error occurred in trade: {e}")
+        api = DerivAPI(app_id=app_id)
+        authorize = await api.authorize(app_token)
+        print("Authorize response:", authorize)
 
 async def fetch_historical_data(symbol, count):
     async with websockets.connect(f'wss://ws.binaryws.com/websockets/v3?app_id={app_id}') as websocket:
