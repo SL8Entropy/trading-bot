@@ -7,10 +7,10 @@ from deriv_api import DerivAPI
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
 failAmount = 0
-startAmount = 100
+startAmount = 10
 symbol = "R_100"
-Lowamount = 40
-Highamount = 60
+Lowamount = 35
+Highamount = 65
 barrier = "0.1"
 interval = 30  # in seconds
 periods = [14, 7, 21]
