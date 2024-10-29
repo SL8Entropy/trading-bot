@@ -15,12 +15,12 @@ app_id = 63226
 
 # Request parameters
 symbol = 'R_100'  # Volatility 100 Index
-granularity = 60  # 1-minute data
-count = 100  # Amount of data points per request
+granularity = 60  # in seconds
+count = 5000  # Amount of data points per request
 data_list = []
 
 # Define the start and end date for the data collection range
-start_date = datetime.datetime.now() - datetime.timedelta(days=30)
+start_date = datetime.datetime.now() - datetime.timedelta(days =90)
 end_date = datetime.datetime.now()
 increment = datetime.timedelta(days=5)  # Increment range
 
@@ -88,14 +88,17 @@ async def main():
     except Exception as e:
         print(f"An error occurred: {e}")
 
-    # Save data to CSV
+    # Save data to CSV (append if file exists)
     if data_list:
         df = pd.DataFrame(data_list)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-        df.to_csv(csv_file_path, index=False)
-        print("Data saved to data.csv")
+        
+        # Append to the existing CSV file if it exists
+        df.to_csv(csv_file_path, mode='a', index=False, header=not os.path.exists(csv_file_path))
+        print("Data appended to data.csv")
     else:
         print("No data collected.")
+
 
 
 # Run the main function

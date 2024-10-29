@@ -1,0 +1,52 @@
+To calculate the Relative Strength Index (RSI), you typically use the Close prices from each interval. The RSI is calculated based on price changes over a specified period, commonly using 14 close prices to measure the average gains and losses over that period.
+
+Why Use Close Prices for RSI?
+The Close price is considered the most definitive price of an interval because it represents where the asset’s price settled at the end of that period. RSI calculations rely on these closing prices to evaluate the momentum and determine whether the asset is overbought or oversold.
+
+Basic RSI Calculation Steps
+Collect Close Prices over the chosen time frame (e.g., 14 intervals if using a 14-period RSI).
+Calculate the average gain and average loss over this period.
+Use the RSI formula:
+𝑅
+𝑆
+𝐼
+=
+100
+−
+(
+100
+1
++
+average gain
+average loss
+)
+RSI=100−( 
+1+ 
+average loss
+average gain
+​
+ 
+100
+​
+ )
+If you're using 1-minute intervals, you’d take 14 of these 1-minute Close prices for each RSI calculation.
+
+
+
+
+start: 02/08/2024 00:58
+end: 25/08/2024 12:18
+todays date: 29/10 17:51
+count = 5000
+granularity = 60
+starts 90 days ago
+collects 5000 data points (constitutes around 3.5 days), then skips 5 days into the future from the beginning of the last part (end of last part +1.5 since end of last oart is 3.5 days after start of last part)
+
+first part start:02/08/2024 00:58
+first part ending:05/08/2024 12:18
+second part starting: 07/08/2024 00:59 (2 days after the end of the last part)
+
+totally, there will be 5 parts, as stipulated by while loop break condition
+
+to repeat this with a different time point, put the starting date as current date - an extra 30 days.keep going into the past, one month at a time. infinite data to train on. 
+
