@@ -16,16 +16,16 @@ app_id = 63226
 # Request parameters
 symbol = 'R_100'  # Volatility 100 Index
 granularity = 60  # 1-minute data
-count = 100  # Amount of data pulled per request
+count = 100  # Amount of data points per request
 data_list = []
 
 # Define the start and end date for the data collection range
 start_date = datetime.datetime.now() - datetime.timedelta(days=30)
 end_date = datetime.datetime.now()
-increment = datetime.timedelta(days=5)  # Set increment period
+increment = datetime.timedelta(days=5)  # Increment range
 
 
-async def fetch_data(symbol, count):
+async def fetch_data(symbol, start, end, granularity, count):
     async with websockets.connect(f'wss://ws.binaryws.com/websockets/v3?app_id={app_id}') as websocket:
         
         # Authorize WebSocket connection
@@ -38,12 +38,18 @@ async def fetch_data(symbol, count):
         if 'error' in auth_data:
             raise Exception(f"Authorization error: {auth_data['error']}")
 
-        # Now request historical data
+        # Format start and end times as timestamps for the API
+        start_timestamp = int(start.timestamp())
+        end_timestamp = int(end.timestamp())
+
+        # Request historical data with defined start, end, and granularity
         request = {
             "ticks_history": symbol,
-            "end": "latest",
+            "start": start_timestamp,
+            "end": end_timestamp,
+            "granularity": granularity,  # Set to 60 seconds (1 minute) or other desired intervals
             "count": count,
-            "style": "ticks"
+            "style": "candles"
         }
         await websocket.send(json.dumps(request))
         response = await websocket.recv()
@@ -58,23 +64,25 @@ async def main():
     x = 0
     try:
         while current_start < end_date:
+            # Define the range for the current request
             current_end = min(current_start + increment, end_date)
 
             # Fetch and append data
-            data = await fetch_data(symbol, count)
-            if data and 'history' in data:
-                history = data['history']
+            data = await fetch_data(symbol, current_start, current_end, granularity, count)
+            if data and 'candles' in data:
+                candles = data['candles']
                 data_list.extend([
-                    {'timestamp': t, 'price': p} for t, p in zip(history['times'], history['prices'])
+                    {'timestamp': candle['epoch'], 'open': candle['open'], 'high': candle['high'],
+                     'low': candle['low'], 'close': candle['close']} for candle in candles
                 ])
             else:
                 print("No data received in response.")
             
-            # Update the date range and delay to respect rate limits
+            # Update the start date for the next range
             current_start = current_end
             await asyncio.sleep(2)
             x += 1
-            if x >= 5:
+            if x >= 5:  # Limit requests as a safeguard
                 break
             
     except Exception as e:
@@ -85,7 +93,7 @@ async def main():
         df = pd.DataFrame(data_list)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
         df.to_csv(csv_file_path, index=False)
-        print("Data saved to volatility_100_data.csv")
+        print("Data saved to data.csv")
     else:
         print("No data collected.")
 
