@@ -11,8 +11,8 @@ startAmount = 10
 symbol = "R_100"
 Lowamount = 35
 Highamount = 65
-barrier = "0.1"
-interval = 30  # in seconds
+barrier = "0.01"
+interval = 15  # in seconds 
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
 
