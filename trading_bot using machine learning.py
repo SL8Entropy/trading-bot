@@ -2,7 +2,30 @@ import asyncio
 import websockets
 import json
 import time
+import os
 from deriv_api import DerivAPI
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import accuracy_score
+
+# Get the directory of the current Python file
+directory = os.path.dirname(os.path.abspath(__file__))
+csv_file_path = os.path.join(directory, 'data_with_indicators.csv')
+
+
+# Load data
+data_with_indicators_list = pd.read_csv(csv_file_path)
+# Drop the "x" column which contains date and time information
+data_with_indicators_list = data_with_indicators_list.iloc[:, 4:]
+
+X = data_with_indicators_list[:-1]
+Y = data_with_indicators_list[1:].iloc[:, 1].values.ravel()
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+# Train model
+model = RandomForestRegressor()
+model.fit(X_train, Y_train)
 
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
@@ -161,11 +184,10 @@ def calculate_stochastic(data, period=14):
 
     return stoch_k[-1], stoch_d
 
-async def update_rsi_and_indicators(symbol, periods):
-    count = max(periods) + 100
+async def update_rsi_and_indicators(periods, data):
     while True:
         try:
-            data = await fetch_historical_data(symbol, count)
+            
             rsi_values = {}
             for period in periods:
                 rsi_values[period] = calculate_rsi(data, period)
@@ -178,10 +200,13 @@ async def update_rsi_and_indicators(symbol, periods):
             count += 100
             await asyncio.sleep(5)
 
-def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d):
+def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d, data):
+    price = data.get('history', {}).get('prices', [None])[0]
+    print(f"price = {price}")
     rsi_14 = rsi_values[14][-1]
     rsi_7 = rsi_values[7][-1]
     rsi_21 = rsi_values[21][-1]
+    '''
     print(f"rsi 7: {rsi_7}, rsi 14: {rsi_14}, rsi: 21: {rsi_21}, stoch k : {stoch_k}, stoch d: {stoch_d}")  
     if (rsi_7 < Lowamount and rsi_14 < Lowamount and rsi_21 < Lowamount + 5 and stoch_k < Lowamount and stoch_d < Lowamount):
         return "CALL"
@@ -189,6 +214,25 @@ def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d):
         return "PUT"
     else:
         return None
+    '''
+    latest_data_list = [price,rsi_7,rsi_14,rsi_21,stoch_k,stoch_d]  
+    latest_data = pd.DataFrame([latest_data_list], columns=X.columns)
+    Y_pred = model.predict(latest_data)
+    print(f"predicted price after 1 minute = {Y_pred}")
+    accuracy = accuracy_score(Y_test, Y_pred)
+    print(f'Accuracy: {accuracy * 100:.2f}%')
+    
+    if Y_pred>(price + price*0.01):
+        print("betting UP")
+        return "CALL"
+    elif  Y_pred<(price - price*0.01):
+        print("betting DOWN")
+        return "PUT"
+    else:
+        print("not betting")
+        return None
+    
+
 
 async def main():
     global failAmount
@@ -198,9 +242,11 @@ async def main():
         print("Authorize response:", authorize)
 
         while True:
-            rsi_values, stoch_k, stoch_d = await update_rsi_and_indicators(symbol, periods)
 
-            direction = enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d)
+            data = await fetch_historical_data(symbol, 71)
+            rsi_values, stoch_k, stoch_d = await update_rsi_and_indicators(periods,data)
+
+            direction = enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d, data)
             if direction:
                 await trade(api, symbol, interval, direction)
             else:
