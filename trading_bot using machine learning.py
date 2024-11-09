@@ -18,7 +18,15 @@ model_file_path = os.path.join(directory, 'random_forest_model.joblib')
 
 
 if os.path.exists(model_file_path):
+    csv_file_path = os.path.join(directory, 'data_with_indicators.csv')
+    # Load data
+    data_with_indicators_list = pd.read_csv(csv_file_path)
+    # Drop the "x" column which contains date and time information
+    data_with_indicators_list = data_with_indicators_list.iloc[:, 4:]
+
+    X = data_with_indicators_list[0:5]
     # Load the model from the file
+    
     model = joblib.load(model_file_path)
     print("Model loaded from file.")
 else:
@@ -26,32 +34,28 @@ else:
     csv_file_path = os.path.join(directory, 'data_with_indicators.csv')
     # Load data
     data_with_indicators_list = pd.read_csv(csv_file_path)
-    # Drop the "x" column which contains date and time information
+    # Drop the "x" column which contains date and time information, and also the high, open and low
     data_with_indicators_list = data_with_indicators_list.iloc[:, 4:]
 
     X = data_with_indicators_list[0:-1]
     Y = data_with_indicators_list[1:].iloc[:, 0].values.ravel()
-
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+    
+    
     # Train model
     model = RandomForestRegressor()
-    model.fit(X_train, Y_train)
+    model.fit(X, Y)
     joblib.dump(model, model_file_path)
     print("Model trained and saved to file.")
 
-    # Evaluate model performance
-    Y_pred = model.predict(X_test)
-    mse = mean_squared_error(Y_test, Y_pred)
-    r2 = r2_score(Y_test, Y_pred)
-    print(f"Model Mean Squared Error: {mse:.2f}")
-    print(f"Model R^2 Score: {r2:.2f}")
 
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
 failAmount = 0
 startAmount = 10
+Lowamount = 45 #for rsi  and stochastic indicators
+Highamount = 55 #for rsi  and stochastic indicators
 symbol = "R_100"
-barrier = "0.1"
+barrier = "0.01"
 interval = 60  # in seconds 
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
@@ -230,12 +234,13 @@ def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d, data):
     
     # Use [0] to access the first element if Y_pred is a single prediction
     Y_pred = model.predict(latest_data)[0]
+    print(f"rsi values (7,14,21): {rsi_7}, {rsi_14}, {rsi_21} ")
+    print(f"stochk = {stoch_k}, stochd = {stoch_d}")
     print(f"Predicted price after 1 minute = {Y_pred}")
-
-    if Y_pred > (price + price * float(barrier)):
+    if Y_pred > (price) and rsi_7 < Lowamount and rsi_14 < Lowamount and rsi_21 < Lowamount + 5 and stoch_k < Lowamount and stoch_d < Lowamount:
         print("Betting UP")
         return "CALL"
-    elif Y_pred < (price - price * float(barrier)):
+    elif Y_pred < (price) and rsi_7 > Highamount and rsi_14 > Highamount and rsi_21 > Highamount - 5 and stoch_k > Highamount and stoch_d > Highamount:
         print("Betting DOWN")
         return "PUT"
     else:

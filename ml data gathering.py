@@ -6,9 +6,7 @@ import os
 import asyncio
 
 print("working...")
-dataAmount = 2500  # Target total data points. there are 250 points per day. 
-#so, by putting a dataAmount = 250, we are telling the bot to start fetching from 1 day ago to todays present date
-#choose an amount depending on the latest datapoint of the data.csv, and todays current date.
+daysBack = 100 #how many days back you want to start fetching data from
 
 directory = os.path.dirname(os.path.abspath(__file__))
 csv_file_path = os.path.join(directory, 'data.csv')
@@ -17,14 +15,14 @@ api_token = 'AP3ri2UNkUqqoCf'
 app_id = 63226
 
 symbol = 'R_100'
-granularity = 60  # seconds
+granularity = 60  # seconds(60,120,180,etc)
 count = 5000  # max per request
 data_list = []
 
 # Adjust the start date for the desired range
-start_date = datetime.datetime.now() - datetime.timedelta(days=int(dataAmount * 0.0036))
+start_date = datetime.datetime.now() - datetime.timedelta(days=daysBack)
 end_date = datetime.datetime.now()
-increment = datetime.timedelta(days=5)  # Increment range
+increment = datetime.timedelta(days=1)  # Increment range
 
 async def fetch_data(symbol, start, end, granularity, count):
     async with websockets.connect(f'wss://ws.binaryws.com/websockets/v3?app_id={app_id}') as websocket:
@@ -56,7 +54,7 @@ async def main():
     total_data_points = 0
     count =1
     try:
-        while current_start < end_date and total_data_points < dataAmount:
+        while current_start < end_date:
             current_end = min(current_start + increment, end_date)
             data = await fetch_data(symbol, current_start, current_end, granularity, count)
             if data and 'candles' in data:
@@ -73,8 +71,6 @@ async def main():
             await asyncio.sleep(2)
             print(f"fetching. please wait. time elapsed = {count*2}")
             count+=1
-            if total_data_points >= dataAmount:
-                break
 
     except Exception as e:
         print(f"An error occurred: {e}")
