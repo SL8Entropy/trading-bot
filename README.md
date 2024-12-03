@@ -46,7 +46,10 @@ Risk Management: A built-in stop-loss mechanism minimizes steep losses. However,
 
 Under normal market conditions, the bot provides consistent returns on investment.
 
+---
+Proof Of Working
 
+https://youtu.be/nJqub27-saw?si=YSeVKotHBznjODYd
 ---
 
 Planned Updates
