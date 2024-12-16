@@ -6,7 +6,7 @@ import os
 import asyncio
 
 print("working...")
-daysBack = 100 #how many days back you want to start fetching data from
+daysBack = 200 #how many days back you want to start fetching data from
 
 directory = os.path.dirname(os.path.abspath(__file__))
 csv_file_path = os.path.join(directory, 'data.csv')
@@ -16,7 +16,7 @@ app_id = 63226
 
 symbol = 'R_100'
 granularity = 60  # seconds(60,120,180,etc)
-count = 5000  # max per request
+dataCount = 5000  # max per request
 data_list = []
 
 # Adjust the start date for the desired range
@@ -56,7 +56,7 @@ async def main():
     try:
         while current_start < end_date:
             current_end = min(current_start + increment, end_date)
-            data = await fetch_data(symbol, current_start, current_end, granularity, count)
+            data = await fetch_data(symbol, current_start, current_end, granularity, dataCount)
             if data and 'candles' in data:
                 candles = data['candles']
                 data_list.extend([
