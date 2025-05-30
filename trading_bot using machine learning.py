@@ -56,7 +56,7 @@ Lowamount = 48 #for rsi  and stochastic indicators
 Highamount = 52 #for rsi  and stochastic indicators
 symbol = "R_100"
 barrier = "0.01"
-interval = 60  # in seconds 
+interval = 60  # in seconds. bot only works with an interval of 60, due to the fact that the mdel is trained to predict the price after only 1 minute.
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
 
@@ -103,7 +103,7 @@ async def trade(api, symbol, interval, direction):
             poc = await api.proposal_open_contract({"proposal_open_contract": 1, "contract_id": contract_id})
             print("Proposal open contract:", poc)
             print(f"Trade ongoing, Please wait. Time elapsed = {time_elapsed}")
-            time_elapsed += interval/3
+            time_elapsed += interval+5/5
             is_sold = poc.get('proposal_open_contract', {}).get('is_sold')
             if is_sold:
                 contract_status = poc.get('proposal_open_contract', {}).get('status')
@@ -118,7 +118,7 @@ async def trade(api, symbol, interval, direction):
                     print("Trade status is unknown.")
                 break
 
-            await asyncio.sleep(interval/3 + 5)
+            await asyncio.sleep(interval+5/5)
         if failAmount >= 4:
             time_left = 0
             print("Failed too many times in a row. This is usually due to market conditions not being normal. Please try again another day.")

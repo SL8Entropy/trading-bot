@@ -1,3 +1,10 @@
+TODo:
+in the input to train the ML model, add previous data point also. (1 minute earlier)
+Y will be the next data point
+
+
+
+
 To calculate the Relative Strength Index (RSI), you typically use the Close prices from each interval. The RSI is calculated based on price changes over a specified period, commonly using 14 close prices to measure the average gains and losses over that period.
 
 Why Use Close Prices for RSI?
