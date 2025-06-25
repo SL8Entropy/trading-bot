@@ -77,6 +77,7 @@ barrier = "0.01"
 interval = 60  # in seconds. model predicts price after 1 minute.
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
+maxFailAmount = 100
 
 async def trade(api, symbol, interval, direction):
     global failAmount
@@ -177,17 +178,17 @@ async def trade(api, symbol, interval, direction):
 
             await asyncio.sleep(interval + 5/5)
 
-        if failAmount >= 4:
+        if failAmount >= maxFailAmount:
             time_left = 0
             print("Failed too many times in a row. This is usually due to market conditions not being normal. Please try again another day.")
             log_event("max_failures_reached", {"failAmount": failAmount})
+            time_remaining = 35
             while True:
-                time_remaining = 30 - time_left
+                time_remaining = time_remaining-5
                 print(f"Time until automatic shutdown: {time_remaining}")
                 log_event("shutdown_countdown", {"time_remaining": time_remaining})
-                time_left += 5
                 time.sleep(5)
-                if time_left <= 0:
+                if time_remaining <= 0:
                     exit(1)
     except Exception as e:
         print(f"An error occurred in trade: {e}")
