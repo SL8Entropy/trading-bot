@@ -68,7 +68,7 @@ else:
 
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
-failAmount = 5
+failAmount = 0
 startAmount = 10
 Lowamount = 48  # for rsi and stochastic indicators
 Highamount = 52  # for rsi and stochastic indicators
