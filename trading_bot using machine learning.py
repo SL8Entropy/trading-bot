@@ -3,19 +3,22 @@ import websockets
 import json
 import time
 import os
-from deriv_api import DerivAPI
+from deriv_api import DerivAPI, ResponseError
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import joblib
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error, r2_score
+import sys
+
 
 # Get the directory of the current Python file
 directory = os.path.dirname(os.path.abspath(__file__))
 model_file_path = os.path.join(directory, 'random_forest_model.joblib')
 # Define log file path
 log_file_path = os.path.join(directory, 'trade_logs.jsonl')
+fail_file_path = os.path.join(directory, 'fail_count.txt')
 
 def log_event(event: str, info: dict):
     """
@@ -68,7 +71,7 @@ else:
 
 app_id = 63226
 app_token = "AP3ri2UNkUqqoCf"
-failAmount = 0
+
 startAmount = 10
 Lowamount = 48  # for rsi and stochastic indicators
 Highamount = 52  # for rsi and stochastic indicators
@@ -78,6 +81,12 @@ interval = 60  # in seconds. model predicts price after 1 minute.
 periods = [14, 7, 21]
 min_data_points = max(periods) + 1
 maxFailAmount = 100
+# Load failAmount from file if it exists
+try:
+    with open(fail_file_path, 'r') as f:
+        failAmount = int(f.read().strip())
+except (FileNotFoundError, ValueError):
+    failAmount = 0  # default if file is missing or invalidstartAmount = 10
 
 async def trade(api, symbol, interval, direction):
     """
@@ -87,7 +96,8 @@ async def trade(api, symbol, interval, direction):
     global failAmount
     global startAmount
 
-    RETRY_DELAY = 1  # seconds to wait before retrying after a price-move error
+    exceptionCount = 0
+    maxExceptions = 3
 
     amount = startAmount * (2 ** failAmount)
     time_elapsed = 0
@@ -116,7 +126,7 @@ async def trade(api, symbol, interval, direction):
                     "proposal": 1,
                     "amount": amount,
                     "barrier": bar,
-                    "basis": "payout",
+                    "basis": "stake",
                     "contract_type": direction,
                     "currency": "USD",
                     "duration": interval,
@@ -127,6 +137,9 @@ async def trade(api, symbol, interval, direction):
                 # If proposal itself fails, log and abort this trade
                 print(f"Proposal request failed: {e}")
                 log_event("proposal_error", {"error": str(e)})
+                exceptionCount+=1
+                if exceptionCount>=maxExceptions:
+                    await reset_bot()
                 raise
 
             # Extract proposal_id and ask_price
@@ -161,23 +174,16 @@ async def trade(api, symbol, interval, direction):
                 buy_data.pop("longcode", None)
                 log_event("buy_response", {"buy": buy_data, "proposal_id": proposal_id})
                 break  # exit retry loop on successful buy
-            except ResponseError as e:
-                err_msg = str(e)
-                # If the error indicates price movement, retry with a fresh proposal
-                if "moved too much" in err_msg or "changed from" in err_msg:
-                    print(f"Buy failed due to price movement: {err_msg}. Retrying...")
-                    log_event("buy_price_moved", {"error": err_msg, "proposal_id": proposal_id})
-                    await asyncio.sleep(RETRY_DELAY)
-                    continue  # fetch a new proposal and try again
-                else:
-                    # Non-price-movement error: abort and propagate
-                    print(f"Buy failed with non-price error: {err_msg}")
-                    log_event("buy_error", {"error": err_msg, "proposal_id": proposal_id})
-                    raise
             except Exception as e:
                 # Other exceptions: abort
                 print(f"Buy raised exception: {e}")
                 log_event("buy_exception", {"error": str(e), "proposal_id": proposal_id})
+
+                # Reset the bot if it's a market-related error
+                if "price has moved" in str(e).lower() or "market value changed too much" in str(e).lower():
+                    exceptionCount+=1
+                    if exceptionCount>=maxExceptions:
+                        await reset_bot()
                 raise
 
         # At this point, buy succeeded and buy_data is available
@@ -217,6 +223,8 @@ async def trade(api, symbol, interval, direction):
                 if status == 'won':
                     print("Trade won!")
                     failAmount = 0
+                    with open(fail_file_path, 'w') as f:
+                        f.write(str(failAmount))
                     log_event("trade_result", {
                         "status": "won",
                         "contract_id": contract_id,
@@ -225,7 +233,9 @@ async def trade(api, symbol, interval, direction):
                 elif status == 'lost':
                     print("Trade lost.")
                     failAmount += 1
-                    print("Number of times failed in a row:", failAmount)
+                    with open(fail_file_path, 'w') as f:
+                        f.write(str(failAmount))                    
+                        print("Number of times failed in a row:", failAmount)
                     log_event("trade_result", {
                         "status": "lost",
                         "contract_id": contract_id,
@@ -405,6 +415,12 @@ def enhanced_triple_rebound_strategy(rsi_values, stoch_k, stoch_d, data):
 
     log_event("strategy_decision", {"decision": decision})
     return decision
+
+async def reset_bot():
+    print("Resetting bot due to critical error...")
+    log_event("bot_reset_triggered", {})
+    await asyncio.sleep(3)  # brief pause before restarting
+    os.execv(__file__, ['python'] + sys.argv)  # restart script
 
 async def main():
     global failAmount
