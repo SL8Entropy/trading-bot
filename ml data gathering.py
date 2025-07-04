@@ -6,7 +6,7 @@ import os
 import asyncio
 
 print("working...")
-daysBack = 200 #how many days back you want to start fetching data from
+daysBack = 20 #how many days back you want to start fetching data from
 
 directory = os.path.dirname(os.path.abspath(__file__))
 csv_file_path = os.path.join(directory, 'data.csv')
