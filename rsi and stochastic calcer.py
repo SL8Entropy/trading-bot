@@ -5,7 +5,8 @@ import numpy as np
 # Load the CSV data
 # Get the directory of the current Python file
 directory = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(directory, 'data.csv')
+csvFileName ='8_hour_data.csv'
+file_path = os.path.join(directory, csvFileName )
 data = pd.read_csv(file_path)
 
 
@@ -42,7 +43,7 @@ data['RSI_21'] = calculate_rsi(data['close'], 21)
 data['Stochastic %K'], data['Stochastic %D'] = calculate_stochastic_kd(data['high'], data['low'], data['close'])
 
 # Save to new CSV with indicators
-output_file = os.path.join(directory, 'data_with_indicators.csv')
+output_file = os.path.join(directory, "indicators_added_"+csvFileName)
 data.to_csv(output_file, index=False)
 print(f"Indicators added and saved to {output_file}")
 

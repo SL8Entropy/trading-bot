@@ -14,15 +14,19 @@ import sys
 from datetime import datetime
 import traceback
 
-#need to log current balance at beginning of bot, and after every trade
-#need to find out how to convert timecode into an actual date time.
 
 
 # Get the directory of the current Python file
 directory = os.path.dirname(os.path.abspath(__file__))
 model_file_path = os.path.join(directory, 'random_forest_model.joblib')
 # Define log file path
-log_file_path = os.path.join(directory, 'trade_logs.jsonl')
+ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+# insert the timestamp before the extension
+base_name = f"trade_logs_{ts}"
+log_file_path = os.path.join(directory, base_name + '.jsonl')
+
+print("Logging to:", log_file_path)
 fail_file_path = os.path.join(directory, 'fail_count.txt')
 
 exception_count = 0

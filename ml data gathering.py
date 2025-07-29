@@ -5,11 +5,20 @@ import datetime
 import os
 import asyncio
 
-print("working...")
-daysBack = 20 #how many days back you want to start fetching data from
-
 directory = os.path.dirname(os.path.abspath(__file__))
-csv_file_path = os.path.join(directory, 'data.csv')
+csv_file_path = os.path.join(directory, '8_hour_data.csv')
+
+# → START ADDITION
+print(f"Output CSV will be written to:\n    {csv_file_path}")
+resp = input("Is this the correct file name and location? [Y/n]: ").strip().lower()
+if resp not in ('y', 'yes', ''):
+    print("Exiting. Please fix the file name and rerun.")
+    import sys; sys.exit(1)
+# ← END ADDITION
+print("working...")
+
+
+
 
 api_token = 'AP3ri2UNkUqqoCf'
 app_id = 63226
@@ -20,8 +29,8 @@ dataCount = 5000  # max per request
 data_list = []
 
 # Adjust the start date for the desired range
-start_date = datetime.datetime.now() - datetime.timedelta(days=daysBack)
-end_date = datetime.datetime.now()
+start_date = datetime.datetime.now() - datetime.timedelta(days=15)
+end_date = start_date + datetime.timedelta(hours=8)
 increment = datetime.timedelta(days=1)  # Increment range
 
 async def fetch_data(symbol, start, end, granularity, count):
